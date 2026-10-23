@@ -132,11 +132,22 @@
           <span class="summary-bar__label">Выбрано:</span>
           <strong class="summary-bar__value">Четверг, 15 октября 2026 • 14:00</strong>
         </div>
-        <a href="#" class="btn btn--primary summary-bar__btn">
+        <button type="button" class="btn btn--primary summary-bar__btn" id="btn-continue">
           <span>Продолжить</span>
           <span class="btn__icon" aria-hidden="true">&rarr;</span>
-        </a>
+        </button>
       </aside>
+
+      <!-- Модальное окно подтверждения записи -->
+      <div class="booking-modal-overlay" id="confirmation-modal" aria-hidden="true" style="display: none;">
+        <div class="booking-modal" role="dialog" aria-labelledby="modal-title" aria-modal="true">
+          <div class="booking-modal__icon" aria-hidden="true">&#10003;</div>
+          <h3 class="booking-modal__title" id="modal-title">Запись успешно оформлена!</h3>
+          <p class="booking-modal__desc">Вы успешно записались на услугу в барбершоп BARBER &amp; CO.</p>
+          <div class="booking-modal__details" id="modal-details"></div>
+          <button type="button" class="btn btn--primary booking-modal__btn" id="modal-close-btn">Отлично</button>
+        </div>
+      </div>
 
     </div>
   </main>

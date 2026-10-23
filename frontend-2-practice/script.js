@@ -1,14 +1,19 @@
 // ============================================================
-// 1. ДАННЫЕ (СЛОТЫ, «СЕГОДНЯ»)
+// 1. ДАННЫЕ (СЛОТЫ, «СЕГОДНЯ») — BARBER & CO
 // ============================================================
 //
 // В реальном приложении эти данные приходят с сервера через API.
 // Сейчас мы моделируем ответ сервера в виде констант.
 // Месяцы в JavaScript 0-индексные: 0 = Январь, 9 = Октябрь.
 
-// Дата «сегодня» — 12 октября 2026 года
+// Текущая актуальная дата («сегодня») формируется динамически через new Date()
+const realNow = new Date();
 const SERVER_DATA = {
-  today: { day: 12, month: 9, year: 2026 },
+  today: {
+    day: realNow.getDate(),
+    month: realNow.getMonth(),
+    year: realNow.getFullYear(),
+  },
 };
 
 // Слоты для нечётных дней (например, 13, 15, 17 октября)
@@ -37,35 +42,37 @@ const SLOTS_EVEN_DAY = [
 
 // Функция имитации запроса слотов с сервера на конкретный день
 function getSlotsForDay(day, month, year) {
-  // Альтернативный сценарий из макета Figma: 16 октября все слоты заняты
-  if (day === 16 && month === 9 && year === 2026) {
-    return [];
-  }
-  // Для остальных дней возвращаем разный набор по чётности дня
   return day % 2 === 0 ? SLOTS_EVEN_DAY : SLOTS_ODD_DAY;
 }
+
+// Находим первый свободный слот для актуальной даты
+const initialTodaySlots = getSlotsForDay(
+  SERVER_DATA.today.day,
+  SERVER_DATA.today.month,
+  SERVER_DATA.today.year
+);
+const firstAvailableTodaySlot = initialTodaySlots.find(function (s) {
+  return s.available;
+});
 
 // ============================================================
 // 2. СОСТОЯНИЕ (МЕСЯЦ, ДЕНЬ, ВРЕМЯ)
 // ============================================================
 //
 // Состояние интерфейса, которое меняется по действиям пользователя.
-// По умолчанию при открытии страницы выбран день 15 октября 2026 и слот 14:00.
+// Инициализируется актуальной доступной датой и первым свободным слотом.
 const BOOKING_STATE = {
-  currentMonth: 9,      // Отображаемый месяц в календаре (Октябрь)
-  currentYear: 2026,    // Отображаемый год в календаре
-  selectedDay: 15,      // Выбранное число
-  selectedMonth: 9,     // Месяц выбранного числа
-  selectedYear: 2026,   // Год выбранного числа
-  selectedTime: "14:00" // Выбранный слот времени
+  currentMonth: SERVER_DATA.today.month, // Отображаемый месяц в календаре
+  currentYear: SERVER_DATA.today.year, // Отображаемый год в календаре
+  selectedDay: SERVER_DATA.today.day, // Выбранный день (актуальная дата)
+  selectedMonth: SERVER_DATA.today.month, // Месяц выбранного дня
+  selectedYear: SERVER_DATA.today.year, // Год выбранного дня
+  selectedTime: firstAvailableTodaySlot ? firstAvailableTodaySlot.time : null, // Выбранный слот времени
 };
 
 // ============================================================
 // 3. ЧИСТЫЕ ФУНКЦИИ (ДЛЯ РАБОТЫ С ДАТАМИ)
 // ============================================================
-//
-// Чистые функции не зависят от DOM и внешнего окружения.
-// Принимают параметры и возвращают результат.
 
 const MONTHS_NOMINATIVE = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -118,7 +125,7 @@ function buildCalendarGrid(year, month) {
     cells.push({ day: d, otherMonth: false });
   }
 
-  // Дни следующего месяца для завершения строк (кратность 7)
+  // Дни следующего месяца
   const totalCells = Math.ceil(cells.length / 7) * 7;
   let nextDay = 1;
   while (cells.length < totalCells) {
@@ -137,7 +144,7 @@ function buildCalendarGrid(year, month) {
 // 4. ОТРИСОВКА И ОБРАБОТЧИКИ СОБЫТИЙ
 // ============================================================
 
-// Отрисовка календаря на текущий месяц
+// Отрисовка календаря
 function renderCalendar() {
   const monthTitleEl = document.querySelector(".calendar-card__month");
   const calendarGrid = document.querySelector(".calendar-days-grid");
@@ -147,7 +154,6 @@ function renderCalendar() {
   const year = BOOKING_STATE.currentYear;
   const month = BOOKING_STATE.currentMonth;
 
-  // Обновление заголовка: «Октябрь 2026»
   monthTitleEl.textContent = MONTHS_NOMINATIVE[month] + " " + year;
 
   const weeks = buildCalendarGrid(year, month);
@@ -170,6 +176,7 @@ function renderCalendar() {
           year === today.year;
         if (isToday) classes += " today";
 
+        // Проверяем выбранный день по числу, месяцу и году
         const isSelected =
           cell.day === BOOKING_STATE.selectedDay &&
           month === BOOKING_STATE.selectedMonth &&
@@ -200,7 +207,6 @@ function renderCalendar() {
 
   calendarGrid.innerHTML = html;
 
-  // Навешиваем обработчики клика заново после каждой перерисовки
   const dayButtons = calendarGrid.querySelectorAll(
     ".day-cell:not(.other-month):not(.disabled)"
   );
@@ -218,7 +224,7 @@ function onDayClick(event) {
   BOOKING_STATE.selectedMonth = BOOKING_STATE.currentMonth;
   BOOKING_STATE.selectedYear = BOOKING_STATE.currentYear;
 
-  // Сбрасываем выбранное время при переключении на другой день
+  // Сбрасываем выбранное время при переключении даты
   BOOKING_STATE.selectedTime = null;
 
   renderCalendar();
@@ -237,7 +243,15 @@ function renderTimeSlots() {
   const month = BOOKING_STATE.selectedMonth;
   const year = BOOKING_STATE.selectedYear;
 
-  // Обновляем заголовок карточки времени: «Доступное время • 15 октября»
+  if (!day || month === null || year === null) {
+    if (timeTitleEl) timeTitleEl.textContent = "Доступное время";
+    timeGrid.innerHTML =
+      '<div class="time-slots-empty">' +
+      "Выберите день в календаре для просмотра слотов" +
+      "</div>";
+    return;
+  }
+
   if (timeTitleEl) {
     timeTitleEl.innerHTML =
       "Доступное время &bull; " + day + " " + MONTHS_GENITIVE[month];
@@ -245,10 +259,9 @@ function renderTimeSlots() {
 
   const slots = getSlotsForDay(day, month, year);
 
-  // Если слотов нет (альтернативный сценарий)
   if (!slots || slots.length === 0) {
     timeGrid.innerHTML =
-      '<div class="time-slots-empty" style="grid-column: 1 / -1; text-align: center; padding: 40px 16px; color: var(--color-text-muted); font-size: 15px; background: #F9FAFB; border-radius: var(--radius-md); border: 1px dashed var(--color-border);">' +
+      '<div class="time-slots-empty">' +
       "В этот день нет свободных слотов для записи" +
       "</div>";
     return;
@@ -258,14 +271,15 @@ function renderTimeSlots() {
   slots.forEach(function (slot) {
     let classes = "time-slot";
     let disabledAttr = "";
-    let iconHtml = "";
+    let extraHtml = "";
 
     if (!slot.available) {
       classes += " unavailable";
       disabledAttr = " disabled";
-      iconHtml = ' <span class="time-slot__icon" aria-hidden="true">&times;</span>';
+      extraHtml = ' <span class="time-slot__label">(Занято)</span>';
     } else if (slot.time === BOOKING_STATE.selectedTime) {
       classes += " selected";
+      extraHtml = ' <span class="time-slot__icon" aria-hidden="true">&#10003;</span>';
     }
 
     html +=
@@ -279,13 +293,12 @@ function renderTimeSlots() {
       '<span class="time-slot__time">' +
       slot.time +
       "</span>" +
-      iconHtml +
+      extraHtml +
       "</button>";
   });
 
   timeGrid.innerHTML = html;
 
-  // Навешиваем обработчики только на доступные слоты
   const availableSlots = timeGrid.querySelectorAll(
     ".time-slot:not(.unavailable)"
   );
@@ -305,7 +318,7 @@ function onTimeSlotClick(event) {
   updateBottomBar();
 }
 
-// Обновление нижней панели с выбранной датой и временем
+// Обновление нижней панели
 function updateBottomBar() {
   const summaryValueEl = document.querySelector(".summary-bar__value");
   if (!summaryValueEl) return;
@@ -313,6 +326,11 @@ function updateBottomBar() {
   const day = BOOKING_STATE.selectedDay;
   const month = BOOKING_STATE.selectedMonth;
   const year = BOOKING_STATE.selectedYear;
+
+  if (!day || month === null || year === null) {
+    summaryValueEl.textContent = "Выберите дату и время для записи";
+    return;
+  }
 
   const dateObj = new Date(year, month, day);
   const dayName = DAYS_OF_WEEK[dateObj.getDay()];
@@ -326,7 +344,7 @@ function updateBottomBar() {
     dayName + ", " + day + " " + monthName + " " + year + " • " + timePart;
 }
 
-// Настройка перелистывания месяцев стрелками «‹» и «›»
+// Переключение месяцев
 function setupMonthNavigation() {
   const prevBtn = document.querySelector(".calendar-nav-prev");
   const nextBtn = document.querySelector(".calendar-nav-next");
@@ -338,7 +356,12 @@ function setupMonthNavigation() {
         BOOKING_STATE.currentMonth = 11;
         BOOKING_STATE.currentYear -= 1;
       }
+      // При смене месяца сбрасываем день и время, согласуя интерфейс
+      BOOKING_STATE.selectedDay = null;
+      BOOKING_STATE.selectedTime = null;
       renderCalendar();
+      renderTimeSlots();
+      updateBottomBar();
     });
   }
 
@@ -349,8 +372,41 @@ function setupMonthNavigation() {
         BOOKING_STATE.currentMonth = 0;
         BOOKING_STATE.currentYear += 1;
       }
+      // При смене месяца сбрасываем день и время, согласуя интерфейс
+      BOOKING_STATE.selectedDay = null;
+      BOOKING_STATE.selectedTime = null;
       renderCalendar();
+      renderTimeSlots();
+      updateBottomBar();
     });
+  }
+}
+
+// Отображение модального окна подтверждения
+function showBookingConfirmation(data) {
+  const modal = document.getElementById("confirmation-modal");
+  const detailsEl = document.getElementById("modal-details");
+  const monthName = MONTHS_GENITIVE[data.month];
+
+  if (detailsEl) {
+    detailsEl.innerHTML =
+      '<div class="booking-modal__item"><strong>Мастер:</strong> ' + data.master + "</div>" +
+      '<div class="booking-modal__item"><strong>Услуга:</strong> ' + data.service + "</div>" +
+      '<div class="booking-modal__item"><strong>Дата:</strong> ' + data.day + " " + monthName + " " + data.year + "</div>" +
+      '<div class="booking-modal__item"><strong>Время:</strong> ' + data.time + "</div>";
+  }
+
+  if (modal) {
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+  } else {
+    alert(
+      "Запись успешно оформлена!\n\n" +
+      "Мастер: " + data.master + "\n" +
+      "Услуга: " + data.service + "\n" +
+      "Дата: " + data.day + " " + monthName + " " + data.year + "\n" +
+      "Время: " + data.time
+    );
   }
 }
 
@@ -359,22 +415,79 @@ function setupContinueButton() {
   const continueBtn = document.querySelector(".summary-bar__btn");
   if (continueBtn) {
     continueBtn.addEventListener("click", function (event) {
+      event.preventDefault();
+
+      // 1. Проверка наличия выбранной даты
+      if (
+        !BOOKING_STATE.selectedDay ||
+        BOOKING_STATE.selectedMonth === null ||
+        BOOKING_STATE.selectedYear === null
+      ) {
+        alert("Пожалуйста, выберите дату для записи в календаре.");
+        return;
+      }
+
+      // 2. Проверка доступности даты (не раньше «сегодня»)
+      if (
+        !isDateSelectable(
+          BOOKING_STATE.selectedDay,
+          BOOKING_STATE.selectedMonth,
+          BOOKING_STATE.selectedYear
+        )
+      ) {
+        alert("Выбранная дата недоступна для записи (уже прошла).");
+        return;
+      }
+
+      // 3. Проверка выбранного времени
       if (!BOOKING_STATE.selectedTime) {
-        event.preventDefault();
         alert("Пожалуйста, выберите удобное время для записи.");
         return;
       }
+
+      // 4. Проверка доступности слота
+      const slots = getSlotsForDay(
+        BOOKING_STATE.selectedDay,
+        BOOKING_STATE.selectedMonth,
+        BOOKING_STATE.selectedYear
+      );
+      const chosenSlot = slots.find(function (s) {
+        return s.time === BOOKING_STATE.selectedTime;
+      });
+
+      if (!chosenSlot || !chosenSlot.available) {
+        alert("Выбранное время недоступно для записи. Пожалуйста, выберите другой слот.");
+        return;
+      }
+
+      const bookingData = {
+        master: "Алексей Смирнов",
+        service: "Мужская стрижка + Моделирование бороды",
+        day: BOOKING_STATE.selectedDay,
+        month: BOOKING_STATE.selectedMonth,
+        year: BOOKING_STATE.selectedYear,
+        time: BOOKING_STATE.selectedTime,
+        timestamp: new Date().toISOString(),
+      };
+
       try {
-        localStorage.setItem(
-          "barber-booking",
-          JSON.stringify({
-            day: BOOKING_STATE.selectedDay,
-            month: BOOKING_STATE.selectedMonth,
-            year: BOOKING_STATE.selectedYear,
-            time: BOOKING_STATE.selectedTime,
-          })
-        );
+        localStorage.setItem("barber-booking", JSON.stringify(bookingData));
       } catch (e) {}
+
+      // Показываем подтверждение
+      showBookingConfirmation(bookingData);
+    });
+  }
+
+  // Закрытие модального окна
+  const closeBtn = document.getElementById("modal-close-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", function () {
+      const modal = document.getElementById("confirmation-modal");
+      if (modal) {
+        modal.style.display = "none";
+        modal.setAttribute("aria-hidden", "true");
+      }
     });
   }
 }
@@ -391,7 +504,6 @@ function init() {
   setupContinueButton();
 }
 
-// Запуск инициализации после построения DOM дерева
 document.addEventListener("DOMContentLoaded", function () {
   init();
 });
